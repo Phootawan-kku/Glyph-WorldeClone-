@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Glyph — a five-letter word game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="toast-wrap"></div>
+
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.6"><path d="M4 20c2-1 4-1 6 0s4 1 6 0 4-1 4-1V4s-2 1-4 1-4-1-6-1-4 1-6 1-4-1-4-1v16s2 1 4 1z"/><path d="M4 20V4"/></svg>
+    <h1>Glyph</h1>
+  </div>
+  <div class="header-icons">
+    <button class="icon-btn" id="howto-btn" title="How to play" aria-label="How to play">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 .5c0 1.6-2.5 2-2.5 3.5"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button class="icon-btn" id="stats-btn" title="Statistics" aria-label="Statistics">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V11M12 20V4M19 20v-7"/></svg>
+    </button>
+    <button class="icon-btn" id="theme-btn" title="Toggle theme" aria-label="Toggle theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="sub">GUESS THE WORD · SIX TRIES · A NEW ONE EACH DAY</div>
+  <div id="board"></div>
+</main>
+
+<div id="keyboard"></div>
+
+<footer>№ <span id="puzzle-no">—</span> · every word is five letters, no more, no less</footer>
+
+<!-- Result modal -->
+<div class="overlay" id="result-overlay">
+  <div class="modal">
+    <button class="modal-close" id="result-close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2 id="result-title">—</h2>
+    <p class="sub" id="result-sub"></p>
+    <div class="answer-line" id="answer-line" style="display:none;"></div>
+    <div class="stats-row">
+      <div class="stat"><div class="n" id="stat-played">0</div><div class="l">PLAYED</div></div>
+      <div class="stat"><div class="n" id="stat-pct">0</div><div class="l">WIN %</div></div>
+      <div class="stat"><div class="n" id="stat-streak">0</div><div class="l">CURRENT STREAK</div></div>
+      <div class="stat"><div class="n" id="stat-max">0</div><div class="l">MAX STREAK</div></div>
+    </div>
+    <div class="dist" id="dist"></div>
+    <button class="share-btn" id="share-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-3.9M8.6 13.5l6.8 3.9"/></svg>
+      SHARE RESULT
+    </button>
+    <div class="countdown">Next word in <b id="countdown-time">—</b></div>
+  </div>
+</div>
+
+<!-- How to play modal -->
+<div class="overlay" id="howto-overlay">
+  <div class="modal howto">
+    <button class="modal-close" id="howto-close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2>How to play</h2>
+    <p>Guess the hidden word in six tries. Each guess must be a real five-letter word. After every guess, the tiles change color to show how close you were.</p>
+    <div class="example"><div class="tile correct">S</div><div class="tile">T</div><div class="tile">O</div><div class="tile">R</div><div class="tile">M</div></div>
+    <div class="ex-label"><b style="color:var(--correct)">S</b> is in the word and in the right spot.</div>
+    <div class="example"><div class="tile">P</div><div class="tile present">L</div><div class="tile">A</div><div class="tile">N</div><div class="tile">T</div></div>
+    <div class="ex-label"><b style="color:var(--present)">L</b> is in the word but in the wrong spot.</div>
+    <div class="example"><div class="tile">C</div><div class="tile">R</div><div class="tile">U</div><div class="tile absent">S</div><div class="tile">T</div></div>
+    <div class="ex-label"><b style="color:var(--paper-dim)">S</b> is not in the word at all.</div>
+    <p>A new word appears every day at midnight, your time.</p>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
