@@ -31,14 +31,23 @@
   </div>
 </header>
 
+<div class="mode-toggle" id="mode-toggle" role="tablist" aria-label="Game mode">
+  <button class="mode-btn active" data-mode="daily" role="tab" aria-selected="true">Daily</button>
+  <button class="mode-btn" data-mode="casual" role="tab" aria-selected="false">Casual<span class="mode-dot" aria-hidden="true"></span></button>
+</div>
+
 <main>
-  <div class="sub">GUESS THE WORD · SIX TRIES · A NEW ONE EACH DAY</div>
+  <div class="sub" id="sub-text">GUESS THE WORD · SIX TRIES · A NEW ONE EACH DAY</div>
   <div id="board"></div>
+  <button class="new-word-btn" id="new-word-btn" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+    New word
+  </button>
 </main>
 
 <div id="keyboard"></div>
 
-<footer>№ <span id="puzzle-no">—</span> · every word is five letters, no more, no less</footer>
+<footer id="footer-text">№ <span id="puzzle-no">—</span> · every word is five letters, no more, no less</footer>
 
 <!-- Result modal -->
 <div class="overlay" id="result-overlay">
@@ -49,6 +58,7 @@
     <h2 id="result-title">—</h2>
     <p class="sub" id="result-sub"></p>
     <div class="answer-line" id="answer-line" style="display:none;"></div>
+    <div class="stats-label" id="stats-label">DAILY STATS</div>
     <div class="stats-row">
       <div class="stat"><div class="n" id="stat-played">0</div><div class="l">PLAYED</div></div>
       <div class="stat"><div class="n" id="stat-pct">0</div><div class="l">WIN %</div></div>
@@ -60,7 +70,14 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-3.9M8.6 13.5l6.8 3.9"/></svg>
       SHARE RESULT
     </button>
-    <div class="countdown">Next word in <b id="countdown-time">—</b></div>
+    <button class="share-btn ghost" id="play-again-btn" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+      PLAY AGAIN
+    </button>
+    <button class="share-btn ghost" id="try-casual-btn" style="display:none;">
+      KEEP PLAYING IN CASUAL MODE →
+    </button>
+    <div class="countdown" id="countdown-wrap">Next word in <b id="countdown-time">—</b></div>
   </div>
 </div>
 
