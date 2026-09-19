@@ -378,12 +378,17 @@
   .dist-bar.hi{ background: var(--correct); }
 
   .answer-line{
-    font-family: var(--font-mono);
+    font-family: var(--font-mono), 'Noto Sans Thai', sans-serif;
     font-size: 13px;
+    line-height: 1.7;
     color: var(--paper-dim);
     margin-bottom: 18px;
   }
-  .answer-line b{ color: var(--gold); letter-spacing:1px; }
+  .answer-line .word-caps{ color: var(--gold); letter-spacing:1px; font-weight:700; font-family: var(--font-mono); }
+  .answer-line .th-strong{
+    color: var(--paper);
+    font-weight:700;
+  }
 
   .share-btn{
     width:100%;
