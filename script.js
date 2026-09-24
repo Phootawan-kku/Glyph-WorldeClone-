@@ -137,8 +137,16 @@
     if (savedMode === 'casual' || savedMode === 'daily') mode = savedMode;
   }catch(e){}
 
-  function activeState(){ return mode === 'daily' ? dailyState : casualState; }
-  function activeAnswer(){ return mode === 'daily' ? ANSWER : casualState.answer; }
+  function activeState(){
+    if (mode === 'daily') return dailyState;
+    if (mode === 'casual') return casualState;
+    return challengeState;
+  }
+  function activeAnswer(){
+    if (mode === 'daily') return ANSWER;
+    if (mode === 'casual') return casualState.answer;
+    return challengeState.answer;
+  }
   function activeStats(){ return mode === 'daily' ? dailyStats : casualStats; }
 
   function loadDailyState(){
@@ -180,7 +188,9 @@
     try{ localStorage.setItem(CASUAL_STORAGE_KEY, JSON.stringify(casualState)); }catch(e){}
   }
   function saveActiveState(){
-    if (mode === 'daily') saveDailyState(); else saveCasualState();
+    if (mode === 'daily') saveDailyState();
+    else if (mode === 'casual') saveCasualState();
+    // challenge state is an ephemeral one-shot round and is not persisted
   }
 
   function loadStats(key, isDaily){
@@ -343,6 +353,7 @@
 
   // ---------------- Game logic ----------------
   function handleKey(key){
+    if (mode === 'challenge' && challengeState.phase !== 'playing') return;
     var st = activeState();
     if (st.status !== 'playing' || revealing) return;
     var curRow = st.guesses.length;
@@ -410,13 +421,21 @@
         st.status = 'won';
         saveActiveState();
         document.getElementById('row-'+r).classList.add('win');
-        recordResult(true, r+1);
-        setTimeout(function(){ openResult(); }, 700);
+        if (mode === 'challenge'){
+          setTimeout(function(){ finishChallenge('solved'); }, 700);
+        } else {
+          recordResult(true, r+1);
+          setTimeout(function(){ openResult(); }, 700);
+        }
       } else if (r === ROWS-1){
         st.status = 'lost';
         saveActiveState();
-        recordResult(false, null);
-        setTimeout(function(){ openResult(); }, 300);
+        if (mode === 'challenge'){
+          setTimeout(function(){ finishChallenge('failed'); }, 300);
+        } else {
+          recordResult(false, null);
+          setTimeout(function(){ openResult(); }, 300);
+        }
       }
       revealing = false;
     }, totalDelay);
@@ -601,23 +620,38 @@
       btn.classList.toggle('active', isActive);
       btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
+    // reset shared elements; challenge branch re-hides what it needs via renderChallengeMode()
+    document.getElementById('board').style.display = '';
+    document.getElementById('keyboard').style.display = '';
+    document.getElementById('challenge-clock').style.display = 'none';
+    document.getElementById('challenge-panel').style.display = 'none';
     if (mode === 'daily'){
       subText.textContent = 'GUESS THE WORD · SIX TRIES · A NEW ONE EACH DAY';
       footerText.innerHTML = '№ <span id="puzzle-no">'+(DAY+1)+'</span> · every word is five letters, no more, no less';
       newWordBtn.style.display = 'none';
-    } else {
+    } else if (mode === 'casual'){
       subText.textContent = 'UNLIMITED PRACTICE · GUESS AS MANY AS YOU LIKE';
       footerText.textContent = 'casual mode · tap "new word" anytime to skip to a fresh one';
       newWordBtn.style.display = 'flex';
+    } else {
+      subText.textContent = '⚡ CHALLENGE MODE · RACE A FRIEND AGAINST THE CLOCK';
+      footerText.textContent = 'same word, same clock, winner takes bragging rights';
+      newWordBtn.style.display = 'none';
     }
+    if (mode === 'challenge') renderChallengeMode();
   }
 
   function switchMode(newMode){
     if (newMode === mode) return;
     if (revealing){ toast('Wait for the reveal to finish'); return; }
+    if (mode === 'challenge' && challengeState.phase === 'playing'){
+      toast('Finish or forfeit your challenge first');
+      return;
+    }
     mode = newMode;
-    try{ localStorage.setItem(MODE_KEY, mode); }catch(e){}
+    try{ if (mode !== 'challenge') localStorage.setItem(MODE_KEY, mode); }catch(e){}
     resultOverlay.classList.remove('open');
+    challengeResultOverlay.classList.remove('open');
     updateModeUI();
     renderActive();
   }
@@ -637,9 +671,291 @@
   });
   newWordBtn.addEventListener('click', function(){ startNewCasualRound(); });
 
+  // ---------------- Challenge mode (race a friend against the clock) ----------------
+  var challengeResultOverlay = document.getElementById('challenge-result-overlay');
+  var challengePanel = document.getElementById('challenge-panel');
+  var challengeClockWrap = document.getElementById('challenge-clock');
+  var challengeTimerHandle = null;
+
+  function makeFreshChallengeState(){
+    return {
+      phase: 'config',      // 'config' | 'intro' | 'playing' | 'done'
+      answer: null,
+      timeLimit: 120,       // seconds; 0 = no limit (stopwatch counts up)
+      guesses: [],
+      status: 'playing',
+      keyStatus: {},
+      startedAt: null,
+      myResult: null,       // {solved, tries, time} once finished
+      isIncoming: false,
+      opponent: null        // {solved, tries, time} decoded from an incoming link
+    };
+  }
+
+  function formatClock(totalSeconds){
+    totalSeconds = Math.max(0, Math.round(totalSeconds));
+    var m = Math.floor(totalSeconds/60);
+    var s = totalSeconds % 60;
+    return m + ':' + (s<10?'0':'') + s;
+  }
+
+  function parseChallengeFromURL(){
+    try{
+      var params = new URLSearchParams(window.location.search);
+      var raw = params.get('ch');
+      if (!raw) return null;
+      var s = raw.replace(/-/g,'+').replace(/_/g,'/');
+      while (s.length % 4) s += '=';
+      var json = decodeURIComponent(escape(atob(s)));
+      var payload = JSON.parse(json);
+      if (!payload || typeof payload.w !== 'string' || payload.w.length !== 5 || !VALID_SET[payload.w]) return null;
+      return payload;
+    }catch(e){ return null; }
+  }
+
+  function buildChallengeLink(){
+    var cs = challengeState;
+    var payload = { w: cs.answer, t: cs.timeLimit, s: cs.myResult.solved?1:0, g: cs.myResult.tries||0, x: cs.myResult.time };
+    var json = JSON.stringify(payload);
+    var b64;
+    try{ b64 = btoa(unescape(encodeURIComponent(json))); }catch(e){ b64 = btoa(json); }
+    b64 = b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    return window.location.origin + window.location.pathname + '?ch=' + b64;
+  }
+
+  function decideWinner(mine, theirs){
+    if (mine.solved && !theirs.solved) return 'me';
+    if (!mine.solved && theirs.solved) return 'them';
+    if (mine.solved && theirs.solved){
+      if (mine.tries !== theirs.tries) return mine.tries < theirs.tries ? 'me' : 'them';
+      if (mine.time !== theirs.time) return mine.time < theirs.time ? 'me' : 'them';
+      return 'tie';
+    }
+    return 'tie'; // both failed to solve it — call it a draw
+  }
+
+  function renderConfigPanel(){
+    var options = [30,60,120,180,300,0];
+    var html = '<h3>Challenge a friend</h3>' +
+      '<p>Play a fresh word against the clock, then send your friend a link — they play the exact same word under the same time limit, and Glyph decides who wins.</p>' +
+      '<div class="time-choice-label">TIME LIMIT</div>' +
+      '<div class="time-choice-row" id="time-choice-row">' +
+      options.map(function(sec){
+        var label = sec===0 ? 'No limit' : (sec<60 ? sec+'s' : (sec/60)+' min');
+        var isActive = sec === challengeState.timeLimit;
+        return '<button type="button" class="time-choice'+(isActive?' active':'')+'" data-sec="'+sec+'">'+label+'</button>';
+      }).join('') +
+      '</div>' +
+      '<button type="button" class="challenge-start-btn" id="start-challenge-btn">START CHALLENGE ⚡</button>';
+    challengePanel.innerHTML = html;
+
+    challengePanel.querySelectorAll('.time-choice').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        challengePanel.querySelectorAll('.time-choice').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        challengeState.timeLimit = parseInt(btn.getAttribute('data-sec'), 10);
+      });
+    });
+    document.getElementById('start-challenge-btn').addEventListener('click', startChallengeRound);
+  }
+
+  function renderIntroPanel(){
+    var opp = challengeState.opponent;
+    var limitLabel = challengeState.timeLimit === 0 ? 'no limit' : formatClock(challengeState.timeLimit);
+    var html = '<h3>⚡ You\'ve been challenged!</h3>' +
+      '<p>A friend already played this word. Beat them — same word, same clock ('+limitLabel+'). Ready?</p>' +
+      '<div class="opponent-stats">' +
+        '<div class="stat"><div class="n">'+(opp.solved ? opp.tries+'/6' : '✕')+'</div><div class="l">THEIR TRIES</div></div>' +
+        '<div class="stat"><div class="n">'+formatClock(opp.time)+'</div><div class="l">THEIR TIME</div></div>' +
+      '</div>' +
+      '<button type="button" class="challenge-start-btn" id="start-challenge-btn">START ⚡</button>';
+    challengePanel.innerHTML = html;
+    document.getElementById('start-challenge-btn').addEventListener('click', startChallengeRound);
+  }
+
+  function renderChallengeMode(){
+    var cs = challengeState;
+    if (cs.phase === 'config'){
+      document.getElementById('board').style.display = 'none';
+      document.getElementById('keyboard').style.display = 'none';
+      challengeClockWrap.style.display = 'none';
+      challengePanel.style.display = 'block';
+      renderConfigPanel();
+    } else if (cs.phase === 'intro'){
+      document.getElementById('board').style.display = 'none';
+      document.getElementById('keyboard').style.display = 'none';
+      challengeClockWrap.style.display = 'none';
+      challengePanel.style.display = 'block';
+      renderIntroPanel();
+    } else if (cs.phase === 'playing'){
+      challengePanel.style.display = 'none';
+      document.getElementById('board').style.display = '';
+      document.getElementById('keyboard').style.display = '';
+      challengeClockWrap.style.display = 'flex';
+      renderActive();
+      challengeTick();
+    } else { // done
+      challengePanel.style.display = 'none';
+      challengeClockWrap.style.display = 'none';
+      document.getElementById('board').style.display = '';
+      document.getElementById('keyboard').style.display = '';
+      renderActive();
+      showChallengeResult();
+    }
+  }
+
+  function startChallengeRound(){
+    var cs = challengeState;
+    cs.phase = 'playing';
+    cs.guesses = [];
+    cs.status = 'playing';
+    cs.keyStatus = {};
+    cs.myResult = null;
+    cs.startedAt = Date.now();
+    if (!cs.answer){ cs.answer = pickRandomAnswer(null); }
+    challengePanel.style.display = 'none';
+    challengePanel.innerHTML = '';
+    document.getElementById('board').style.display = '';
+    document.getElementById('keyboard').style.display = '';
+    challengeClockWrap.style.display = 'flex';
+    resetBoardDOM();
+    if (challengeTimerHandle) clearInterval(challengeTimerHandle);
+    challengeTick();
+    challengeTimerHandle = setInterval(challengeTick, 1000);
+  }
+
+  function challengeTick(){
+    var cs = challengeState;
+    if (cs.phase !== 'playing') return;
+    var elapsed = (Date.now() - cs.startedAt) / 1000;
+    var clockEl = document.getElementById('clock-time');
+    if (cs.timeLimit > 0){
+      var remaining = cs.timeLimit - elapsed;
+      if (remaining <= 0){
+        clockEl.textContent = '0:00';
+        if (cs.status === 'playing'){
+          cs.status = 'lost';
+          finishChallenge('timeout');
+        }
+        return;
+      }
+      clockEl.textContent = formatClock(remaining);
+      challengeClockWrap.classList.toggle('low', remaining <= 10);
+    } else {
+      clockEl.textContent = formatClock(elapsed);
+      challengeClockWrap.classList.remove('low');
+    }
+  }
+
+  function finishChallenge(reason){
+    var cs = challengeState;
+    if (challengeTimerHandle){ clearInterval(challengeTimerHandle); challengeTimerHandle = null; }
+    var elapsed = (Date.now() - cs.startedAt) / 1000;
+    var timeUsed = reason === 'timeout' ? cs.timeLimit : elapsed;
+    var solved = cs.status === 'won';
+    cs.myResult = { solved: solved, tries: solved ? cs.guesses.length : null, time: Math.round(timeUsed) };
+    cs.phase = 'done';
+    challengeClockWrap.style.display = 'none';
+    challengePanel.style.display = 'none';
+    challengePanel.innerHTML = '';
+    showChallengeResult();
+  }
+
+  function buildVsHtml(mine, theirs, outcome){
+    function col(label, r, isWinner){
+      return '<div class="vs-col'+(isWinner?' winner':'')+'">' +
+        '<div class="vs-label">'+label+'</div>' +
+        (r.solved ? '<div class="vs-tries">'+r.tries+'/6</div>' : '<div class="vs-badge">✕</div>') +
+        '<div class="vs-time">'+formatClock(r.time)+(r.solved?'':' · DNF')+'</div>' +
+      '</div>';
+    }
+    return col('YOU', mine, outcome==='me') + '<div class="vs-versus">vs</div>' + col('THEM', theirs, outcome==='them');
+  }
+
+  function showChallengeResult(){
+    var cs = challengeState;
+    var mine = cs.myResult;
+    var theirs = cs.opponent;
+    var title, sub;
+
+    if (!theirs){
+      title = mine.solved ? pickPraise(mine.tries) : 'Time to send it';
+      sub = mine.solved
+        ? 'Solved in ' + mine.tries + (mine.tries===1?' try':' tries') + ' · ' + formatClock(mine.time)
+        : "Didn't crack it this time — your friend still has a shot at beating you.";
+      document.getElementById('cr-vs').innerHTML = '';
+    } else {
+      var outcome = decideWinner(mine, theirs);
+      title = outcome === 'me' ? '🏆 You win!' : outcome === 'them' ? '😅 Your friend wins' : '🤝 Tie';
+      sub = 'Same word, same clock — here is how it went.';
+      document.getElementById('cr-vs').innerHTML = buildVsHtml(mine, theirs, outcome);
+    }
+
+    document.getElementById('cr-title').textContent = title;
+    document.getElementById('cr-sub').textContent = sub;
+
+    var crAnswerLine = document.getElementById('cr-answer-line');
+    var info = getWordInfo(cs.answer);
+    var thaiBit = info ? ' — แปลว่า <span class="th-strong">'+escapeHtml(info[0])+'</span> · อ่านว่า <span class="th-strong">'+escapeHtml(info[1])+'</span>' : '';
+    crAnswerLine.style.display = 'block';
+    crAnswerLine.innerHTML = 'The word was <span class="word-caps">'+cs.answer.toUpperCase()+'</span>'+thaiBit;
+
+    document.getElementById('cr-share-btn').style.display = theirs ? 'none' : 'flex';
+    document.getElementById('cr-again-btn').style.display = 'flex';
+
+    challengeResultOverlay.classList.add('open');
+  }
+
+  document.getElementById('cr-share-btn').addEventListener('click', function(){
+    var link = buildChallengeLink();
+    var mine = challengeState.myResult;
+    var resultBit = mine.solved ? ('solved it in '+mine.tries+'/6, '+formatClock(mine.time)) : "couldn't crack it";
+    var text = '⚡ I just raced the word game Glyph and ' + resultBit + '. Think you can beat me? ' + link;
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){
+        toast('Challenge link copied!');
+      }).catch(function(){
+        toast('Could not copy — copy the link manually');
+      });
+    } else {
+      toast('Challenge link copied!');
+    }
+  });
+
+  document.getElementById('cr-again-btn').addEventListener('click', function(){
+    challengeResultOverlay.classList.remove('open');
+    challengeState = makeFreshChallengeState();
+    if (mode === 'challenge') renderChallengeMode();
+  });
+  document.getElementById('challenge-result-close').addEventListener('click', function(){
+    challengeResultOverlay.classList.remove('open');
+  });
+  challengeResultOverlay.addEventListener('click', function(e){ if (e.target===challengeResultOverlay) challengeResultOverlay.classList.remove('open'); });
+
+  document.getElementById('quit-challenge-btn').addEventListener('click', function(){
+    if (challengeState.phase !== 'playing') return;
+    challengeState.status = 'lost';
+    finishChallenge('forfeit');
+  });
+
+  var incomingChallenge = parseChallengeFromURL();
+  var challengeState = makeFreshChallengeState();
+  if (incomingChallenge){
+    challengeState.phase = 'intro';
+    challengeState.answer = incomingChallenge.w;
+    challengeState.timeLimit = incomingChallenge.t;
+    challengeState.isIncoming = true;
+    challengeState.opponent = {
+      solved: !!incomingChallenge.s,
+      tries: incomingChallenge.g || null,
+      time: incomingChallenge.x || 0
+    };
+    mode = 'challenge';
+  }
+
   // first-time how-to
   try{
-    if (!localStorage.getItem('glyph_seen_howto')){
+    if (!localStorage.getItem('glyph_seen_howto') && !incomingChallenge){
       howtoOverlay.classList.add('open');
       localStorage.setItem('glyph_seen_howto','1');
     }
