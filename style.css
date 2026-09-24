@@ -159,6 +159,127 @@
   .new-word-btn svg{ width:14px; height:14px; }
   .new-word-btn:hover{ color: var(--gold); border-color: var(--gold-dim); background: rgba(226,168,63,0.06); }
 
+  /* ---------- Challenge mode ---------- */
+  .challenge-clock{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 12px;
+    margin: 2px 0 16px;
+  }
+  .challenge-clock #clock-time{
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 34px;
+    color: var(--gold);
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+  }
+  .challenge-clock.low #clock-time{ color: var(--danger); animation: clockPulse 1s ease infinite; }
+  @keyframes clockPulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.45; } }
+  .quit-link{
+    background:none; border:none; color: var(--paper-dim);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing:0.5px;
+    text-decoration: underline; cursor:pointer; padding: 4px;
+  }
+  .quit-link:hover{ color: var(--danger); }
+
+  .challenge-panel{
+    width: min(360px, 88vw);
+    margin: 0 auto 18px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 22px 20px;
+    text-align: center;
+  }
+  .challenge-panel h3{
+    font-family: var(--font-display);
+    font-size: 21px;
+    color: var(--gold);
+    margin: 0 0 8px;
+  }
+  .challenge-panel p{
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height:1.6;
+    color: var(--paper-dim);
+    margin: 0 0 16px;
+  }
+  .challenge-panel .opponent-stats{
+    display:flex;
+    justify-content:center;
+    gap:20px;
+    margin-bottom:16px;
+    font-family: var(--font-mono);
+  }
+  .challenge-panel .opponent-stats .stat .n{ font-family: var(--font-display); font-size:22px; font-weight:700; color:var(--paper); }
+  .challenge-panel .opponent-stats .stat .l{ font-size:9px; color:var(--paper-dim); letter-spacing:0.5px; }
+  .time-choice-label{
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 1px;
+    color: var(--paper-dim);
+    margin-bottom: 8px;
+  }
+  .time-choice-row{
+    display:flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content:center;
+    margin-bottom: 18px;
+  }
+  .time-choice{
+    font-family: var(--font-mono);
+    font-weight:700;
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    background: transparent;
+    color: var(--paper);
+    cursor:pointer;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .time-choice:hover{ border-color: var(--gold-dim); }
+  .time-choice.active{ background: var(--gold); border-color: var(--gold); color:#2a1a06; }
+  .challenge-start-btn{
+    width:100%;
+    background: var(--gold);
+    color: #2a1a06;
+    border:none;
+    font-family: var(--font-mono);
+    font-weight:700;
+    font-size:13px;
+    letter-spacing:0.5px;
+    padding: 12px;
+    border-radius: 8px;
+    cursor:pointer;
+  }
+  .challenge-start-btn:hover{ filter:brightness(1.08); }
+
+  .vs-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 14px;
+    margin: 6px 0 18px;
+  }
+  .vs-col{
+    flex:1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 14px 8px;
+    text-align:center;
+  }
+  .vs-col.winner{ border-color: var(--correct); background: rgba(111,143,106,0.12); }
+  .vs-col .vs-label{ font-family: var(--font-mono); font-size:10px; letter-spacing:1px; color: var(--paper-dim); margin-bottom:8px; }
+  .vs-col .vs-badge{ font-size:18px; margin-bottom:4px; }
+  .vs-col .vs-tries{ font-family: var(--font-display); font-size: 24px; font-weight:700; color: var(--paper); }
+  .vs-col .vs-time{ font-family: var(--font-mono); font-size:11px; color: var(--paper-dim); margin-top:2px; }
+  .vs-versus{ font-family: var(--font-display); font-size: 15px; color: var(--paper-dim); font-style: italic; }
+
   main{
     flex:1;
     width:100%;
@@ -378,12 +499,17 @@
   .dist-bar.hi{ background: var(--correct); }
 
   .answer-line{
-    font-family: var(--font-mono);
+    font-family: var(--font-mono), 'Noto Sans Thai', sans-serif;
     font-size: 13px;
+    line-height: 1.7;
     color: var(--paper-dim);
     margin-bottom: 18px;
   }
-  .answer-line b{ color: var(--gold); letter-spacing:1px; }
+  .answer-line .word-caps{ color: var(--gold); letter-spacing:1px; font-weight:700; font-family: var(--font-mono); }
+  .answer-line .th-strong{
+    color: var(--paper);
+    font-weight:700;
+  }
 
   .share-btn{
     width:100%;

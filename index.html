@@ -6,7 +6,7 @@
 <title>Glyph — a five-letter word game</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -34,10 +34,16 @@
 <div class="mode-toggle" id="mode-toggle" role="tablist" aria-label="Game mode">
   <button class="mode-btn active" data-mode="daily" role="tab" aria-selected="true">Daily</button>
   <button class="mode-btn" data-mode="casual" role="tab" aria-selected="false">Casual<span class="mode-dot" aria-hidden="true"></span></button>
+  <button class="mode-btn" data-mode="challenge" role="tab" aria-selected="false">⚡ Challenge</button>
 </div>
 
 <main>
   <div class="sub" id="sub-text">GUESS THE WORD · SIX TRIES · A NEW ONE EACH DAY</div>
+  <div class="challenge-clock" id="challenge-clock" style="display:none;">
+    <span id="clock-time">—</span>
+    <button class="quit-link" id="quit-challenge-btn">forfeit</button>
+  </div>
+  <div class="challenge-panel" id="challenge-panel" style="display:none;"></div>
   <div id="board"></div>
   <button class="new-word-btn" id="new-word-btn" style="display:none;">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
@@ -78,6 +84,24 @@
       KEEP PLAYING IN CASUAL MODE →
     </button>
     <div class="countdown" id="countdown-wrap">Next word in <b id="countdown-time">—</b></div>
+  </div>
+</div>
+
+<!-- Challenge result / comparison modal -->
+<div class="overlay" id="challenge-result-overlay">
+  <div class="modal">
+    <button class="modal-close" id="challenge-result-close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2 id="cr-title">—</h2>
+    <p class="sub" id="cr-sub"></p>
+    <div class="vs-row" id="cr-vs"></div>
+    <div class="answer-line" id="cr-answer-line" style="display:none;"></div>
+    <button class="share-btn" id="cr-share-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-3.9M8.6 13.5l6.8 3.9"/></svg>
+      COPY CHALLENGE LINK
+    </button>
+    <button class="share-btn ghost" id="cr-again-btn">⚡ SEND A NEW CHALLENGE</button>
   </div>
 </div>
 
