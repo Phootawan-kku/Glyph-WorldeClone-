@@ -280,6 +280,78 @@
     setTimeout(function(){ el.remove(); }, 1900);
   }
 
+  var MILESTONES = [5, 10, 25, 50, 100, 200, 365];
+  function milestoneToast(streak){
+    var wrap = document.getElementById('toast-wrap');
+    var el = document.createElement('div');
+    el.className = 'toast milestone';
+    el.textContent = '🔥 ' + streak + '-day streak!';
+    wrap.appendChild(el);
+    setTimeout(function(){ el.remove(); }, 3300);
+  }
+
+  // ---------------- Sound (synthesized, no audio files needed) ----------------
+  var SOUND_KEY = 'glyph_sound_v1';
+  var soundOn = true;
+  try{ soundOn = localStorage.getItem(SOUND_KEY) !== 'off'; }catch(e){}
+  var audioCtx = null;
+  function ensureAudioCtx(){
+    if (audioCtx) return audioCtx;
+    try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ audioCtx = null; }
+    return audioCtx;
+  }
+  function playTone(freq, startOffset, duration, opts){
+    if (!soundOn) return;
+    var ctx = ensureAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended'){ ctx.resume(); }
+    opts = opts || {};
+    var t0 = ctx.currentTime + (startOffset || 0);
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = opts.type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (opts.slideTo){ osc.frequency.exponentialRampToValueAtTime(opts.slideTo, t0 + duration); }
+    var peak = opts.gain != null ? opts.gain : 0.09;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.02);
+  }
+  function playKeyTap(){ playTone(520, 0, 0.045, { type:'sine', gain:0.05 }); }
+  function playBackspace(){ playTone(320, 0, 0.05, { type:'sine', gain:0.045 }); }
+  function playFlipTick(result){
+    var freq = result === 'correct' ? 740 : result === 'present' ? 560 : 300;
+    playTone(freq, 0, 0.09, { type:'triangle', gain:0.06 });
+  }
+  function playWinSound(){
+    [523.25, 659.25, 783.99, 1046.5].forEach(function(f, i){
+      playTone(f, i*0.09, 0.22, { type:'sine', gain:0.08 });
+    });
+  }
+  function playLoseSound(){
+    playTone(330, 0, 0.5, { type:'sine', gain:0.07, slideTo: 165 });
+  }
+  function setSoundOn(on){
+    soundOn = on;
+    try{ localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); }catch(e){}
+    var btn = document.getElementById('sound-btn');
+    var icon = document.getElementById('sound-icon');
+    btn.classList.toggle('muted', !on);
+    icon.innerHTML = on
+      ? '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a9 9 0 0 1 0 12"/>'
+      : '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M15.5 9.5l5 5M20.5 9.5l-5 5"/>';
+  }
+  document.getElementById('sound-btn').addEventListener('click', function(){
+    ensureAudioCtx(); // create/resume on a real user gesture
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    setSoundOn(!soundOn);
+  });
+  setSoundOn(soundOn);
+
   // ---------------- Render active mode's state (on load / mode switch) ----------------
   function resetBoardDOM(){
     for (var r=0;r<ROWS;r++){
@@ -377,6 +449,7 @@
         var tile = tileEls[curRow][curGuess.length];
         tile.textContent = '';
         tile.classList.remove('filled');
+        playBackspace();
       }
     } else {
       if (curGuess.length < COLS){
@@ -384,6 +457,7 @@
         tile.textContent = key.toUpperCase();
         tile.classList.add('filled');
         curGuess += key;
+        playKeyTap();
       }
     }
   }
@@ -408,6 +482,7 @@
         tile.classList.add('flip');
         setTimeout(function(){
           tile.classList.add(result[i]);
+          playFlipTick(result[i]);
         }, 275);
       }, i*230);
     });
@@ -424,6 +499,7 @@
         if (mode === 'challenge'){
           setTimeout(function(){ finishChallenge('solved'); }, 700);
         } else {
+          playWinSound();
           recordResult(true, r+1);
           setTimeout(function(){ openResult(); }, 700);
         }
@@ -433,6 +509,7 @@
         if (mode === 'challenge'){
           setTimeout(function(){ finishChallenge('failed'); }, 300);
         } else {
+          playLoseSound();
           recordResult(false, null);
           setTimeout(function(){ openResult(); }, 300);
         }
@@ -451,6 +528,9 @@
         dailyStats.lastWinDay = DAY;
         dailyStats.maxStreak = Math.max(dailyStats.maxStreak, dailyStats.streak);
         dailyStats.dist[guessCount-1] = (dailyStats.dist[guessCount-1]||0) + 1;
+        if (MILESTONES.indexOf(dailyStats.streak) !== -1){
+          setTimeout(function(){ milestoneToast(dailyStats.streak); }, 600);
+        }
       } else {
         dailyStats.streak = 0;
       }
@@ -854,6 +934,7 @@
     var timeUsed = reason === 'timeout' ? cs.timeLimit : elapsed;
     var solved = cs.status === 'won';
     cs.myResult = { solved: solved, tries: solved ? cs.guesses.length : null, time: Math.round(timeUsed) };
+    if (solved) playWinSound(); else playLoseSound();
     cs.phase = 'done';
     challengeClockWrap.style.display = 'none';
     challengePanel.style.display = 'none';

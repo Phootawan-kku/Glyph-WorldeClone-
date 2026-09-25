@@ -397,6 +397,25 @@
   @keyframes toast-in{ from{ opacity:0; transform: translateY(-8px); } to{ opacity:1; transform: translateY(0); } }
   @keyframes toast-out{ to{ opacity:0; transform: translateY(-8px); } }
 
+  .toast.milestone{
+    background: linear-gradient(135deg, var(--gold), var(--present));
+    color: #2a1a06;
+    font-size: 15px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    padding: 14px 26px;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(226,168,63,0.35), 0 6px 18px rgba(0,0,0,0.35);
+    animation: milestone-in .35s cubic-bezier(.34,1.56,.64,1), toast-out .3s ease 2.9s forwards;
+  }
+  @keyframes milestone-in{
+    0%{ opacity:0; transform: translateY(-12px) scale(0.85); }
+    60%{ opacity:1; transform: translateY(2px) scale(1.05); }
+    100%{ opacity:1; transform: translateY(0) scale(1); }
+  }
+
+  #sound-btn.muted{ color: var(--paper-dim); opacity: 0.55; }
+
   /* ---------- Keyboard ---------- */
   #keyboard{
     width:100%;
