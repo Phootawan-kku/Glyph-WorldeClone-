@@ -352,6 +352,154 @@
   });
   setSoundOn(soundOn);
 
+  // ---------------- Achievements ----------------
+  var ACH_KEY = 'glyph_ach_v1';
+
+  function loadAchStore(){
+    try{
+      var raw = localStorage.getItem(ACH_KEY);
+      if (raw){
+        var st = JSON.parse(raw);
+        if (st && st.unlocked && st.counters) return st;
+      }
+    }catch(e){}
+    // first run: seed counters from any existing stats so long-time players aren't reset
+    return {
+      unlocked: {},
+      counters: {
+        totalGames: (dailyStats.played||0) + (casualStats.played||0),
+        totalWins: (dailyStats.wins||0) + (casualStats.wins||0),
+        casualWins: casualStats.wins||0,
+        challengeRounds: 0,
+        challengeWins: 0
+      }
+    };
+  }
+  var ach = loadAchStore();
+  function saveAchStore(){
+    try{ localStorage.setItem(ACH_KEY, JSON.stringify(ach)); }catch(e){}
+  }
+
+  // test(ctx): ctx describes the game that just ended (null during the silent startup sync)
+  var ACHIEVEMENTS = [
+    { id:'first_win',       icon:'🌱', title:'First Steps',   desc:'Win your first game.',
+      test:function(){ return ach.counters.totalWins >= 1; } },
+    { id:'genius',          icon:'🧠', title:'Genius',        desc:'Solve a puzzle on the very first try.',
+      test:function(c){ return !!c && c.won && c.tries === 1; } },
+    { id:'sharp',           icon:'🎯', title:'Sharpshooter',  desc:'Solve a puzzle in 2 tries or fewer.',
+      test:function(c){ return !!c && c.won && c.tries <= 2; } },
+    { id:'clutch',          icon:'😅', title:'Clutch',        desc:'Win on your 6th and final guess.',
+      test:function(c){ return !!c && c.won && c.tries === 6; } },
+    { id:'lucky_start',     icon:'🍀', title:'Lucky Start',   desc:'Land 3 or more green tiles with your first guess.',
+      test:function(c){
+        if (!c || !c.guesses || !c.guesses.length) return false;
+        return scoreGuess(c.guesses[0], c.answer).filter(function(r){ return r === 'correct'; }).length >= 3;
+      } },
+    { id:'streak_3',        icon:'🔥', title:'On a Roll',     desc:'Reach a 3-day daily streak.',
+      test:function(){ return dailyStats.maxStreak >= 3; } },
+    { id:'streak_7',        icon:'📅', title:'Week Warrior',  desc:'Reach a 7-day daily streak.',
+      test:function(){ return dailyStats.maxStreak >= 7; } },
+    { id:'streak_30',       icon:'👑', title:'Devoted',       desc:'Reach a 30-day daily streak.',
+      test:function(){ return dailyStats.maxStreak >= 30; } },
+    { id:'casual_10',       icon:'☕', title:'Warming Up',    desc:'Win 10 casual games.',
+      test:function(){ return ach.counters.casualWins >= 10; } },
+    { id:'casual_50',       icon:'📚', title:'Word Nerd',     desc:'Win 50 casual games.',
+      test:function(){ return ach.counters.casualWins >= 50; } },
+    { id:'games_100',       icon:'💯', title:'Centurion',     desc:'Play 100 games in total.',
+      test:function(){ return ach.counters.totalGames >= 100; } },
+    { id:'challenge_first', icon:'⚡', title:'Challenger',    desc:'Finish your first challenge round.',
+      test:function(){ return ach.counters.challengeRounds >= 1; } },
+    { id:'challenge_win',   icon:'🏆', title:'Victorious',    desc:'Beat a friend in a challenge.',
+      test:function(){ return ach.counters.challengeWins >= 1; } },
+    { id:'speedster',       icon:'🚀', title:'Speedster',     desc:'Solve a challenge in under 30 seconds.',
+      test:function(c){ return !!c && c.mode === 'challenge' && c.won && c.timeSec < 30; } },
+    { id:'rival',           icon:'🥊', title:'Rival',         desc:'Win 5 challenges against friends.',
+      test:function(){ return ach.counters.challengeWins >= 5; } },
+    { id:'night_owl',       icon:'🦉', title:'Night Owl',     desc:'Win a game between midnight and 5 AM.',
+      test:function(c){ return !!c && c.won && c.hour >= 0 && c.hour < 5; } }
+  ];
+
+  function playAchievementSound(){
+    playTone(880, 0, 0.22, { type:'sine', gain:0.07 });
+    playTone(1174.66, 0.1, 0.3, { type:'sine', gain:0.07 });
+  }
+  function achievementToast(a){
+    var wrap = document.getElementById('toast-wrap');
+    var el = document.createElement('div');
+    el.className = 'toast milestone achievement';
+    el.innerHTML = '<span class="ach-toast-icon">'+a.icon+'</span>' +
+      '<span class="ach-toast-text"><span class="ach-toast-kicker">ACHIEVEMENT UNLOCKED</span>' +
+      '<span class="ach-toast-title">'+a.title+'</span></span>';
+    wrap.appendChild(el);
+    playAchievementSound();
+    setTimeout(function(){ el.remove(); }, 3300);
+  }
+
+  function checkAchievements(ctx, silent){
+    var newly = [];
+    ACHIEVEMENTS.forEach(function(a){
+      if (ach.unlocked[a.id]) return;
+      var ok = false;
+      try{ ok = a.test(ctx); }catch(e){ ok = false; }
+      if (ok){ ach.unlocked[a.id] = Date.now(); newly.push(a); }
+    });
+    if (newly.length){
+      saveAchStore();
+      if (!silent){
+        newly.forEach(function(a, i){
+          setTimeout(function(){ achievementToast(a); }, 1000 + i*900);
+        });
+        document.getElementById('ach-btn').classList.add('has-new');
+      }
+    }
+    return newly;
+  }
+
+  // called once whenever a game (daily, casual or challenge round) finishes
+  function onGameEnd(info){
+    var c = ach.counters;
+    c.totalGames += 1;
+    if (info.won){
+      c.totalWins += 1;
+      if (info.mode === 'casual') c.casualWins += 1;
+    }
+    if (info.mode === 'challenge'){
+      c.challengeRounds += 1;
+      if (info.outcome === 'me') c.challengeWins += 1;
+    }
+    info.hour = new Date().getHours();
+    saveAchStore();
+    checkAchievements(info, false);
+  }
+
+  function renderAchievements(){
+    var count = 0;
+    document.getElementById('ach-grid').innerHTML = ACHIEVEMENTS.map(function(a){
+      var ts = ach.unlocked[a.id];
+      if (ts) count++;
+      var date = ts ? new Date(ts).toLocaleDateString(undefined, { month:'short', day:'numeric' }) : '';
+      return '<div class="ach-item'+(ts?' unlocked':'')+'">' +
+        '<div class="ach-icon">'+(ts ? a.icon : '🔒')+'</div>' +
+        '<div class="ach-title">'+a.title+'</div>' +
+        '<div class="ach-desc">'+a.desc+'</div>' +
+        (ts ? '<div class="ach-date">'+date+'</div>' : '') +
+      '</div>';
+    }).join('');
+    document.getElementById('ach-count').textContent = count + ' / ' + ACHIEVEMENTS.length;
+    document.getElementById('ach-bar-fill').style.width = (100 * count / ACHIEVEMENTS.length) + '%';
+  }
+  var achOverlay = document.getElementById('ach-overlay');
+  document.getElementById('ach-btn').addEventListener('click', function(){
+    renderAchievements();
+    this.classList.remove('has-new');
+    achOverlay.classList.add('open');
+  });
+  document.getElementById('ach-close').addEventListener('click', function(){ achOverlay.classList.remove('open'); });
+  achOverlay.addEventListener('click', function(e){ if (e.target === achOverlay) achOverlay.classList.remove('open'); });
+
+  // retroactively unlock anything already earned (streaks, totals) without a wall of toasts
+  checkAchievements(null, true);
+
   // ---------------- Render active mode's state (on load / mode switch) ----------------
   function resetBoardDOM(){
     for (var r=0;r<ROWS;r++){
@@ -501,6 +649,7 @@
         } else {
           playWinSound();
           recordResult(true, r+1);
+          onGameEnd({ mode: mode, won: true, tries: r+1, guesses: st.guesses.slice(), answer: answer });
           setTimeout(function(){ openResult(); }, 700);
         }
       } else if (r === ROWS-1){
@@ -511,6 +660,7 @@
         } else {
           playLoseSound();
           recordResult(false, null);
+          onGameEnd({ mode: mode, won: false, tries: null, guesses: st.guesses.slice(), answer: answer });
           setTimeout(function(){ openResult(); }, 300);
         }
       }
@@ -935,6 +1085,11 @@
     var solved = cs.status === 'won';
     cs.myResult = { solved: solved, tries: solved ? cs.guesses.length : null, time: Math.round(timeUsed) };
     if (solved) playWinSound(); else playLoseSound();
+    onGameEnd({
+      mode: 'challenge', won: solved, tries: cs.myResult.tries,
+      guesses: cs.guesses.slice(), answer: cs.answer, timeSec: cs.myResult.time,
+      outcome: cs.opponent ? decideWinner(cs.myResult, cs.opponent) : null
+    });
     cs.phase = 'done';
     challengeClockWrap.style.display = 'none';
     challengePanel.style.display = 'none';

@@ -25,6 +25,9 @@
     <button class="icon-btn" id="stats-btn" title="Statistics" aria-label="Statistics">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V11M12 20V4M19 20v-7"/></svg>
     </button>
+    <button class="icon-btn" id="ach-btn" title="Achievements" aria-label="Achievements">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5v2a3 3 0 0 0 3 3M16 6h3v2a3 3 0 0 1-3 3"/><path d="M12 13v4M10 17h4M8.5 20h7"/></svg>
+    </button>
     <button class="icon-btn" id="sound-btn" title="Toggle sound" aria-label="Toggle sound">
       <svg id="sound-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a9 9 0 0 1 0 12"/></svg>
     </button>
@@ -105,6 +108,19 @@
       COPY CHALLENGE LINK
     </button>
     <button class="share-btn ghost" id="cr-again-btn">⚡ SEND A NEW CHALLENGE</button>
+  </div>
+</div>
+
+<!-- Achievements modal -->
+<div class="overlay" id="ach-overlay">
+  <div class="modal ach-modal">
+    <button class="modal-close" id="ach-close" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2>Achievements</h2>
+    <p class="sub"><span id="ach-count">0 / 0</span> unlocked</p>
+    <div class="ach-bar"><div class="ach-bar-fill" id="ach-bar-fill"></div></div>
+    <div class="ach-grid" id="ach-grid"></div>
   </div>
 </div>
 
