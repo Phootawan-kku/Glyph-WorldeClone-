@@ -264,10 +264,19 @@
 
   document.addEventListener('keydown', function(e){
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (document.querySelector('.overlay.open')) return; // a modal is open: don't type behind it
     var k = e.key.toLowerCase();
     if (k === 'enter') handleKey('enter');
     else if (k === 'backspace') handleKey('backspace');
     else if (/^[a-z]$/.test(k)) handleKey(k);
+  });
+
+  // After a mouse/touch click, drop focus from the button. Otherwise a later Enter keypress
+  // would also "click" it (e.g. New word / Play again) and restart the round.
+  // Keyboard activation (detail === 0) keeps focus so Tab navigation still works.
+  document.addEventListener('click', function(e){
+    var b = e.target && e.target.closest ? e.target.closest('button') : null;
+    if (b && e.detail > 0) b.blur();
   });
 
   // ---------------- Toast ----------------
@@ -909,16 +918,18 @@
 
   function makeFreshChallengeState(){
     return {
-      phase: 'config',      // 'config' | 'intro' | 'playing' | 'done'
+      phase: 'config',       // 'config' | 'intro' | 'playing' | 'done'
+      pendingType: 'random', // UI selection in the config panel: 'random' | 'custom'
+      challengeKind: 'race', // the kind of the ACTUAL challenge in play: 'race' | 'custom'
       answer: null,
-      timeLimit: 120,       // seconds; 0 = no limit (stopwatch counts up)
+      timeLimit: 120,        // seconds; 0 = no limit (stopwatch counts up)
       guesses: [],
       status: 'playing',
       keyStatus: {},
       startedAt: null,
-      myResult: null,       // {solved, tries, time} once finished
+      myResult: null,        // {solved, tries, time} once finished — null if the host set a custom word and never played
       isIncoming: false,
-      opponent: null        // {solved, tries, time} decoded from an incoming link
+      opponent: null         // {solved, tries, time} decoded from an incoming link — null for custom-word challenges
     };
   }
 
@@ -939,13 +950,16 @@
       var json = decodeURIComponent(escape(atob(s)));
       var payload = JSON.parse(json);
       if (!payload || typeof payload.w !== 'string' || payload.w.length !== 5 || !VALID_SET[payload.w]) return null;
+      if (payload.m !== 'custom') payload.m = 'race'; // old links had no 'm' field — treat as a race challenge
       return payload;
     }catch(e){ return null; }
   }
 
   function buildChallengeLink(){
     var cs = challengeState;
-    var payload = { w: cs.answer, t: cs.timeLimit, s: cs.myResult.solved?1:0, g: cs.myResult.tries||0, x: cs.myResult.time };
+    var payload = cs.myResult
+      ? { w: cs.answer, t: cs.timeLimit, m: 'race', s: cs.myResult.solved?1:0, g: cs.myResult.tries||0, x: cs.myResult.time }
+      : { w: cs.answer, t: cs.timeLimit, m: 'custom' };
     var json = JSON.stringify(payload);
     var b64;
     try{ b64 = btoa(unescape(encodeURIComponent(json))); }catch(e){ b64 = btoa(json); }
@@ -964,21 +978,17 @@
     return 'tie'; // both failed to solve it — call it a draw
   }
 
-  function renderConfigPanel(){
+  function timeChoiceRowHtml(){
     var options = [30,60,120,180,300,0];
-    var html = '<h3>Challenge a friend</h3>' +
-      '<p>Play a fresh word against the clock, then send your friend a link — they play the exact same word under the same time limit, and Glyph decides who wins.</p>' +
-      '<div class="time-choice-label">TIME LIMIT</div>' +
-      '<div class="time-choice-row" id="time-choice-row">' +
+    return '<div class="time-choice-row" id="time-choice-row">' +
       options.map(function(sec){
         var label = sec===0 ? 'No limit' : (sec<60 ? sec+'s' : (sec/60)+' min');
         var isActive = sec === challengeState.timeLimit;
         return '<button type="button" class="time-choice'+(isActive?' active':'')+'" data-sec="'+sec+'">'+label+'</button>';
       }).join('') +
-      '</div>' +
-      '<button type="button" class="challenge-start-btn" id="start-challenge-btn">START CHALLENGE ⚡</button>';
-    challengePanel.innerHTML = html;
-
+      '</div>';
+  }
+  function wireTimeChoiceButtons(){
     challengePanel.querySelectorAll('.time-choice').forEach(function(btn){
       btn.addEventListener('click', function(){
         challengePanel.querySelectorAll('.time-choice').forEach(function(b){ b.classList.remove('active'); });
@@ -986,19 +996,104 @@
         challengeState.timeLimit = parseInt(btn.getAttribute('data-sec'), 10);
       });
     });
-    document.getElementById('start-challenge-btn').addEventListener('click', startChallengeRound);
+  }
+  function shakeEl(el){
+    el.classList.remove('shake-el');
+    void el.offsetWidth; // restart animation
+    el.classList.add('shake-el');
+  }
+
+  function renderConfigPanel(){
+    var cs = challengeState;
+    var html = '<h3>Challenge a friend</h3>' +
+      '<div class="chal-type-row">' +
+        '<button type="button" class="chal-type-btn'+(cs.pendingType==='random'?' active':'')+'" data-type="random">🎲 Random word</button>' +
+        '<button type="button" class="chal-type-btn'+(cs.pendingType==='custom'?' active':'')+'" data-type="custom">✍️ My own word</button>' +
+      '</div>';
+
+    if (cs.pendingType === 'custom'){
+      html += '<p>Pick a secret 5-letter word — it has to be a real word Glyph recognizes. Your friend gets the time limit below to crack it.</p>' +
+        '<div class="time-choice-label">TIME LIMIT FOR YOUR FRIEND</div>' +
+        timeChoiceRowHtml() +
+        '<div class="time-choice-label">YOUR SECRET WORD</div>' +
+        '<div class="secret-word-row">' +
+          '<input type="password" id="secret-word-input" maxlength="5" autocomplete="new-password" spellcheck="false" placeholder="•••••">' +
+          '<button type="button" class="eye-btn" id="secret-word-eye" aria-label="Show word">👁</button>' +
+        '</div>' +
+        '<div class="secret-word-hint" id="secret-word-hint">5 letters, must be a real word</div>' +
+        '<button type="button" class="challenge-start-btn" id="create-challenge-btn">CREATE CHALLENGE ⚡</button>';
+    } else {
+      html += '<p>Play a fresh word against the clock, then send your friend a link — they play the exact same word under the same time limit, and Glyph decides who wins.</p>' +
+        '<div class="time-choice-label">TIME LIMIT</div>' +
+        timeChoiceRowHtml() +
+        '<button type="button" class="challenge-start-btn" id="start-challenge-btn">START CHALLENGE ⚡</button>';
+    }
+
+    challengePanel.innerHTML = html;
+    wireTimeChoiceButtons();
+
+    challengePanel.querySelectorAll('.chal-type-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        cs.pendingType = btn.getAttribute('data-type');
+        renderConfigPanel();
+      });
+    });
+
+    if (cs.pendingType === 'custom'){
+      var input = document.getElementById('secret-word-input');
+      var hint = document.getElementById('secret-word-hint');
+      var eye = document.getElementById('secret-word-eye');
+      input.addEventListener('input', function(){
+        var v = input.value.toLowerCase().replace(/[^a-z]/g,'').slice(0,5);
+        if (v !== input.value) input.value = v;
+        hint.textContent = '5 letters, must be a real word';
+        hint.classList.remove('error');
+      });
+      input.addEventListener('keydown', function(e){ e.stopPropagation(); }); // don't let the on-screen keyboard/physical-key handler see this
+      eye.addEventListener('click', function(){
+        input.type = input.type === 'password' ? 'text' : 'password';
+        eye.textContent = input.type === 'password' ? '👁' : '🙈';
+        input.focus();
+      });
+      document.getElementById('create-challenge-btn').addEventListener('click', function(){
+        var w = input.value.toLowerCase();
+        if (w.length !== 5){
+          hint.textContent = 'Word must be exactly 5 letters.';
+          hint.classList.add('error');
+          shakeEl(input);
+          return;
+        }
+        if (!VALID_SET[w]){
+          hint.textContent = 'Not a valid word — try another.';
+          hint.classList.add('error');
+          shakeEl(input);
+          return;
+        }
+        createCustomChallenge(w);
+      });
+    } else {
+      document.getElementById('start-challenge-btn').addEventListener('click', startChallengeRound);
+    }
   }
 
   function renderIntroPanel(){
-    var opp = challengeState.opponent;
-    var limitLabel = challengeState.timeLimit === 0 ? 'no limit' : formatClock(challengeState.timeLimit);
-    var html = '<h3>⚡ You\'ve been challenged!</h3>' +
-      '<p>A friend already played this word. Beat them — same word, same clock ('+limitLabel+'). Ready?</p>' +
-      '<div class="opponent-stats">' +
-        '<div class="stat"><div class="n">'+(opp.solved ? opp.tries+'/6' : '✕')+'</div><div class="l">THEIR TRIES</div></div>' +
-        '<div class="stat"><div class="n">'+formatClock(opp.time)+'</div><div class="l">THEIR TIME</div></div>' +
-      '</div>' +
-      '<button type="button" class="challenge-start-btn" id="start-challenge-btn">START ⚡</button>';
+    var cs = challengeState;
+    var limitLabel = cs.timeLimit === 0 ? 'no limit' : formatClock(cs.timeLimit);
+    var html;
+    if (cs.challengeKind === 'custom'){
+      html = '<h3>✍️ A friend made you a word!</h3>' +
+        '<p>Someone picked this word just for you to crack — same clock either way ('+limitLabel+'). Ready?</p>' +
+        '<button type="button" class="challenge-start-btn" id="start-challenge-btn">START ⚡</button>';
+    } else {
+      var opp = cs.opponent;
+      html = '<h3>⚡ You\'ve been challenged!</h3>' +
+        '<p>A friend already played this word. Beat them — same word, same clock ('+limitLabel+'). Ready?</p>' +
+        '<div class="opponent-stats">' +
+          '<div class="stat"><div class="n">'+(opp.solved ? opp.tries+'/6' : '✕')+'</div><div class="l">THEIR TRIES</div></div>' +
+          '<div class="stat"><div class="n">'+formatClock(opp.time)+'</div><div class="l">THEIR TIME</div></div>' +
+        '</div>' +
+        '<button type="button" class="challenge-start-btn" id="start-challenge-btn">START ⚡</button>';
+    }
     challengePanel.innerHTML = html;
     document.getElementById('start-challenge-btn').addEventListener('click', startChallengeRound);
   }
@@ -1036,6 +1131,7 @@
 
   function startChallengeRound(){
     var cs = challengeState;
+    if (!cs.isIncoming) cs.challengeKind = 'race'; // outgoing rounds are always races; incoming keeps its decoded kind
     cs.phase = 'playing';
     cs.guesses = [];
     cs.status = 'playing';
@@ -1052,6 +1148,23 @@
     if (challengeTimerHandle) clearInterval(challengeTimerHandle);
     challengeTick();
     challengeTimerHandle = setInterval(challengeTick, 1000);
+  }
+
+  function createCustomChallenge(word){
+    var cs = challengeState;
+    cs.answer = word;
+    cs.challengeKind = 'custom';
+    cs.opponent = null;
+    cs.myResult = null;
+    cs.guesses = [];
+    cs.status = 'playing';
+    cs.phase = 'done';
+    challengePanel.style.display = 'none';
+    challengePanel.innerHTML = '';
+    document.getElementById('board').style.display = 'none';
+    document.getElementById('keyboard').style.display = 'none';
+    challengeClockWrap.style.display = 'none';
+    showChallengeResult();
   }
 
   function challengeTick(){
@@ -1114,7 +1227,12 @@
     var theirs = cs.opponent;
     var title, sub;
 
-    if (!theirs){
+    if (!mine && cs.challengeKind === 'custom'){
+      title = '✍️ Challenge ready!';
+      var limitLabel = cs.timeLimit === 0 ? 'no limit' : formatClock(cs.timeLimit);
+      sub = 'Send this link — your friend has ' + limitLabel + ' to crack your word.';
+      document.getElementById('cr-vs').innerHTML = '';
+    } else if (!theirs){
       title = mine.solved ? pickPraise(mine.tries) : 'Time to send it';
       sub = mine.solved
         ? 'Solved in ' + mine.tries + (mine.tries===1?' try':' tries') + ' · ' + formatClock(mine.time)
@@ -1145,8 +1263,13 @@
   document.getElementById('cr-share-btn').addEventListener('click', function(){
     var link = buildChallengeLink();
     var mine = challengeState.myResult;
-    var resultBit = mine.solved ? ('solved it in '+mine.tries+'/6, '+formatClock(mine.time)) : "couldn't crack it";
-    var text = '⚡ I just raced the word game Glyph and ' + resultBit + '. Think you can beat me? ' + link;
+    var text;
+    if (!mine){
+      text = '⚡ I picked a secret 5-letter word in Glyph — think you can crack it before time runs out? ' + link;
+    } else {
+      var resultBit = mine.solved ? ('solved it in '+mine.tries+'/6, '+formatClock(mine.time)) : "couldn't crack it";
+      text = '⚡ I just raced the word game Glyph and ' + resultBit + '. Think you can beat me? ' + link;
+    }
     if (navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(function(){
         toast('Challenge link copied!');
@@ -1181,7 +1304,8 @@
     challengeState.answer = incomingChallenge.w;
     challengeState.timeLimit = incomingChallenge.t;
     challengeState.isIncoming = true;
-    challengeState.opponent = {
+    challengeState.challengeKind = incomingChallenge.m; // 'race' | 'custom'
+    challengeState.opponent = incomingChallenge.m === 'custom' ? null : {
       solved: !!incomingChallenge.s,
       tries: incomingChallenge.g || null,
       time: incomingChallenge.x || 0

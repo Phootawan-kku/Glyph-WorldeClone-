@@ -258,6 +258,68 @@
   }
   .challenge-start-btn:hover{ filter:brightness(1.08); }
 
+  .chal-type-row{
+    display:flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .chal-type-btn{
+    flex:1;
+    font-family: var(--font-mono);
+    font-weight:700;
+    font-size: 12px;
+    padding: 10px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    background: transparent;
+    color: var(--paper);
+    cursor:pointer;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .chal-type-btn:hover{ border-color: var(--gold-dim); }
+  .chal-type-btn.active{ background: var(--gold); border-color: var(--gold); color:#2a1a06; }
+
+  .secret-word-row{
+    display:flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .secret-word-row input{
+    flex:1;
+    min-width:0;
+    font-family: var(--font-mono);
+    font-weight:700;
+    font-size: 20px;
+    letter-spacing: 6px;
+    text-align:center;
+    text-transform: uppercase;
+    background: var(--ink);
+    border: 2px solid var(--panel-border);
+    border-radius: 8px;
+    color: var(--paper);
+    padding: 10px 8px;
+    outline:none;
+  }
+  .secret-word-row input:focus{ border-color: var(--gold-dim); }
+  .eye-btn{
+    width: 44px;
+    flex-shrink:0;
+    font-size: 18px;
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    cursor:pointer;
+  }
+  .eye-btn:hover{ border-color: var(--gold-dim); }
+  .secret-word-hint{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--paper-dim);
+    margin-bottom: 16px;
+  }
+  .secret-word-hint.error{ color: var(--danger); }
+  .shake-el{ animation: shake .4s ease; }
+
   .vs-row{
     display:flex;
     align-items:center;
@@ -503,10 +565,11 @@
     display:flex; align-items:center; justify-content:center;
     z-index:50;
     opacity:0; pointer-events:none;
-    transition: opacity .2s ease;
+    visibility:hidden; /* closed modals can't hold keyboard focus (Enter would "click" their hidden buttons) */
+    transition: opacity .2s ease, visibility 0s linear .2s;
     padding: 20px;
   }
-  .overlay.open{ opacity:1; pointer-events:auto; }
+  .overlay.open{ opacity:1; pointer-events:auto; visibility:visible; transition: opacity .2s ease, visibility 0s; }
   .modal{
     background: var(--panel);
     border: 1px solid var(--panel-border);
