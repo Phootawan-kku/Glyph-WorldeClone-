@@ -940,6 +940,21 @@
     return m + ':' + (s<10?'0':'') + s;
   }
 
+  // Scrambles the link payload so a plain base64-decode doesn't hand back readable JSON
+  // (and the word inside it). This is obfuscation, not real encryption — a browser-only
+  // game has to know the word to check guesses, so anyone willing to read this source
+  // and run the same XOR could still recover it. It just stops the "paste into a base64
+  // decoder" shortcut from working, which covers the realistic case of a nosy friend.
+  var CIPHER_KEY = 'Glyph-v1-9f3Qz-salt-7Lm2';
+  function xorScramble(str){
+    var out = '';
+    for (var i = 0; i < str.length; i++){
+      var k = CIPHER_KEY.charCodeAt(i % CIPHER_KEY.length) ^ (i & 0xFF);
+      out += String.fromCharCode(str.charCodeAt(i) ^ k);
+    }
+    return out; // XOR is its own inverse, so the same function encodes and decodes
+  }
+
   function parseChallengeFromURL(){
     try{
       var params = new URLSearchParams(window.location.search);
@@ -947,7 +962,7 @@
       if (!raw) return null;
       var s = raw.replace(/-/g,'+').replace(/_/g,'/');
       while (s.length % 4) s += '=';
-      var json = decodeURIComponent(escape(atob(s)));
+      var json = xorScramble(atob(s));
       var payload = JSON.parse(json);
       if (!payload || typeof payload.w !== 'string' || payload.w.length !== 5 || !VALID_SET[payload.w]) return null;
       if (payload.m !== 'custom') payload.m = 'race'; // old links had no 'm' field — treat as a race challenge
@@ -961,8 +976,7 @@
       ? { w: cs.answer, t: cs.timeLimit, m: 'race', s: cs.myResult.solved?1:0, g: cs.myResult.tries||0, x: cs.myResult.time }
       : { w: cs.answer, t: cs.timeLimit, m: 'custom' };
     var json = JSON.stringify(payload);
-    var b64;
-    try{ b64 = btoa(unescape(encodeURIComponent(json))); }catch(e){ b64 = btoa(json); }
+    var b64 = btoa(xorScramble(json));
     b64 = b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
     return window.location.origin + window.location.pathname + '?ch=' + b64;
   }
