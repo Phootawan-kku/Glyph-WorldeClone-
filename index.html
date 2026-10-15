@@ -2,8 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Glyph — a five-letter word game</title>
+<meta name="description" content="Glyph is a free five-letter word game. Guess the hidden word in six tries, play daily or casually, or challenge a friend against the clock.">
+<meta name="theme-color" content="#241019">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Glyph">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Glyph — a five-letter word game">
+<meta property="og:description" content="Guess the hidden word in six tries. Daily puzzle, unlimited casual play, hard mode, and friend challenges.">
+<meta property="og:image" content="https://glyph-worlde.vercel.app/icons/og-image.png">
+<meta property="og:url" content="https://glyph-worlde.vercel.app/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Glyph — a five-letter word game">
+<meta name="twitter:description" content="Guess the hidden word in six tries. Play daily or challenge a friend.">
+<meta name="twitter:image" content="https://glyph-worlde.vercel.app/icons/og-image.png">
+<script>
+/* Apply saved theme before first paint to avoid a flash */
+(function(){try{var t=localStorage.getItem('glyph_theme_v1');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
@@ -11,6 +34,7 @@
 </head>
 <body>
 
+<noscript><p style="padding:24px;text-align:center;font-family:monospace">Glyph needs JavaScript to run. Please enable it and reload.</p></noscript>
 <div id="toast-wrap"></div>
 
 <header>
@@ -43,6 +67,13 @@
   <button class="mode-btn" data-mode="challenge" role="tab" aria-selected="false">⚡ Challenge</button>
 </div>
 
+<div class="hard-row">
+  <button type="button" class="hard-toggle" id="hard-toggle" role="switch" aria-checked="false" title="Hard mode: revealed hints must be used in later guesses">
+    <span class="hard-switch" aria-hidden="true"><span class="hard-knob"></span></span>
+    <span class="hard-label">Hard mode</span>
+  </button>
+</div>
+
 <main>
   <div class="sub" id="sub-text">GUESS THE WORD · SIX TRIES · A NEW ONE EACH DAY</div>
   <div class="challenge-clock" id="challenge-clock" style="display:none;">
@@ -51,6 +82,7 @@
   </div>
   <div class="challenge-panel" id="challenge-panel" style="display:none;"></div>
   <div id="board"></div>
+  <div class="daily-countdown" id="daily-countdown" style="display:none;">Next word in <b id="daily-countdown-time">—</b></div>
   <button class="new-word-btn" id="new-word-btn" style="display:none;">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
     New word
@@ -136,12 +168,20 @@
     <div class="ex-label"><b style="color:var(--correct)">S</b> is in the word and in the right spot.</div>
     <div class="example"><div class="tile">P</div><div class="tile present">L</div><div class="tile">A</div><div class="tile">N</div><div class="tile">T</div></div>
     <div class="ex-label"><b style="color:var(--present)">L</b> is in the word but in the wrong spot.</div>
-    <div class="example"><div class="tile">C</div><div class="tile">R</div><div class="tile">U</div><div class="tile absent">S</div><div class="tile">T</div></div>
-    <div class="ex-label"><b style="color:var(--paper-dim)">S</b> is not in the word at all.</div>
+    <div class="example"><div class="tile">V</div><div class="tile">A</div><div class="tile">G</div><div class="tile absent">U</div><div class="tile">E</div></div>
+    <div class="ex-label"><b style="color:var(--paper-dim)">U</b> is not in the word at all.</div>
+    <p><b>Hard mode:</b> any hint you reveal must be used in your next guess. Greens stay in place, yellows must appear somewhere. Switch it on before your first guess.</p>
     <p>A new word appears every day at midnight, your time.</p>
   </div>
 </div>
 
 <script src="script.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+</script>
 </body>
 </html>

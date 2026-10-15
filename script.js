@@ -424,6 +424,8 @@
       test:function(c){ return !!c && c.mode === 'challenge' && c.won && c.timeSec < 30; } },
     { id:'rival',           icon:'🥊', title:'Rival',         desc:'Win 5 challenges against friends.',
       test:function(){ return ach.counters.challengeWins >= 5; } },
+    { id:'hardcore',         icon:'💪', title:'Hardcore',      desc:'Win a game in hard mode.',
+      test:function(c){ return !!c && c.won && !!c.hard; } },
     { id:'night_owl',       icon:'🦉', title:'Night Owl',     desc:'Win a game between midnight and 5 AM.',
       test:function(c){ return !!c && c.won && c.hour >= 0 && c.hour < 5; } }
   ];
@@ -599,6 +601,14 @@
         toast('Not in word list');
         return;
       }
+      if (hardMode){
+        var hardErr = hardModeError(curGuess, st, activeAnswer());
+        if (hardErr){
+          shakeRow(curRow);
+          toast(hardErr);
+          return;
+        }
+      }
       submitGuess(curGuess, curRow);
     } else if (key === 'backspace'){
       if (curGuess.length > 0){
@@ -630,6 +640,8 @@
     var st = activeState();
     var answer = activeAnswer();
     var result = scoreGuess(guess, answer);
+    if (st.guesses.length === 0) st.hard = hardMode;
+    else if (!hardMode) st.hard = false;
     st.guesses.push(guess);
     saveActiveState();
 
@@ -658,7 +670,7 @@
         } else {
           playWinSound();
           recordResult(true, r+1);
-          onGameEnd({ mode: mode, won: true, tries: r+1, guesses: st.guesses.slice(), answer: answer });
+          onGameEnd({ mode: mode, won: true, tries: r+1, guesses: st.guesses.slice(), answer: answer, hard: !!st.hard });
           setTimeout(function(){ openResult(); }, 700);
         }
       } else if (r === ROWS-1){
@@ -669,7 +681,7 @@
         } else {
           playLoseSound();
           recordResult(false, null);
-          onGameEnd({ mode: mode, won: false, tries: null, guesses: st.guesses.slice(), answer: answer });
+          onGameEnd({ mode: mode, won: false, tries: null, guesses: st.guesses.slice(), answer: answer, hard: !!st.hard });
           setTimeout(function(){ openResult(); }, 300);
         }
       }
@@ -791,29 +803,44 @@
     if (casualState.status !== 'playing') startNewCasualRound();
   });
 
-  var countdownTimer = null;
-  function tickCountdown(){
-    if (countdownTimer) clearInterval(countdownTimer);
-    function update(){
-      var now = new Date();
-      var next = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1);
-      var diff = next - now;
-      var h = Math.floor(diff/3600000);
-      var m = Math.floor((diff%3600000)/60000);
-      var s = Math.floor((diff%60000)/1000);
-      document.getElementById('countdown-time').textContent =
-        (h<10?'0':'')+h+':'+(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
-    }
-    update();
-    countdownTimer = setInterval(update, 1000);
+  var dailyCountdownEl = document.getElementById('daily-countdown');
+  function formatHMS(diff){
+    var h = Math.floor(diff/3600000);
+    var m = Math.floor((diff%3600000)/60000);
+    var s = Math.floor((diff%60000)/1000);
+    return (h<10?'0':'')+h+':'+(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
   }
+  // Runs every second: updates the countdown in the result modal and the
+  // persistent line under the board, and rolls over to the new puzzle at local midnight.
+  function updateCountdowns(){
+    var now = new Date();
+    var next = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1);
+    var text = formatHMS(next - now);
+    document.getElementById('countdown-time').textContent = text;
+    document.getElementById('daily-countdown-time').textContent = text;
+    dailyCountdownEl.style.display = (mode === 'daily' && dailyState.status !== 'playing') ? 'block' : 'none';
+    checkDayRollover();
+  }
+  function checkDayRollover(){
+    if (dayIndex() === DAY) return;
+    // a new day has started: reload so the new daily word and fresh state load,
+    // unless the player is mid-way through a timed challenge or a tile reveal
+    if (revealing) return;
+    if (mode === 'challenge' && challengeState.phase === 'playing') return;
+    location.reload();
+  }
+  function tickCountdown(){ updateCountdowns(); }
+  setInterval(updateCountdowns, 1000);
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) updateCountdowns();
+  });
 
   shareBtnEl.addEventListener('click', function(){
     var st = activeState();
     var answer = activeAnswer();
     var lines = [];
     var label = mode === 'daily' ? ('Glyph #' + (DAY+1)) : 'Glyph (casual)';
-    lines.push(label + ' ' + (st.status==='won' ? st.guesses.length+'/6' : 'X/6'));
+    lines.push(label + ' ' + (st.status==='won' ? st.guesses.length+'/6' : 'X/6') + (st.hard ? '*' : ''));
     st.guesses.forEach(function(g){
       var result = scoreGuess(g, answer);
       lines.push(result.map(function(r){
@@ -839,12 +866,90 @@
   howtoOverlay.addEventListener('click', function(e){ if (e.target===howtoOverlay) howtoOverlay.classList.remove('open'); });
 
   // ---------------- Theme toggle ----------------
-  document.getElementById('theme-btn').addEventListener('click', function(){
-    var root = document.documentElement;
-    var cur = root.getAttribute('data-theme');
-    if (cur === 'light'){ root.setAttribute('data-theme','dark'); }
-    else if (cur === 'dark'){ root.removeAttribute('data-theme'); }
-    else { root.setAttribute('data-theme','light'); }
+  var THEME_KEY = 'glyph_theme_v1';
+  var themeBtn = document.getElementById('theme-btn');
+  var themeIcon = themeBtn.querySelector('svg');
+  var ICON_MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>';
+  var ICON_SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+  var systemLight = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+
+  function effectiveTheme(){
+    var t = document.documentElement.getAttribute('data-theme');
+    if (t === 'light' || t === 'dark') return t;
+    return (systemLight && systemLight.matches) ? 'light' : 'dark';
+  }
+  function syncThemeUI(){
+    var t = effectiveTheme();
+    // show the icon of the theme you will switch TO
+    themeIcon.innerHTML = t === 'dark' ? ICON_SUN : ICON_MOON;
+    var label = t === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+    themeBtn.setAttribute('aria-label', label);
+    themeBtn.title = label;
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', t === 'dark' ? '#241019' : '#f6ecda');
+  }
+  themeBtn.addEventListener('click', function(){
+    var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+    syncThemeUI();
+  });
+  if (systemLight){
+    var onSystemChange = function(){ syncThemeUI(); };
+    if (systemLight.addEventListener) systemLight.addEventListener('change', onSystemChange);
+    else if (systemLight.addListener) systemLight.addListener(onSystemChange);
+  }
+  syncThemeUI();
+
+  // ---------------- Hard mode ----------------
+  var HARD_KEY = 'glyph_hard_v1';
+  var hardMode = false;
+  try{ hardMode = localStorage.getItem(HARD_KEY) === 'on'; }catch(e){}
+  var hardToggle = document.getElementById('hard-toggle');
+  function syncHardUI(){ hardToggle.setAttribute('aria-checked', hardMode ? 'true' : 'false'); }
+  syncHardUI();
+
+  var ORDINALS = ['1st','2nd','3rd','4th','5th'];
+  // Returns an error message if `guess` ignores a hint revealed by an earlier guess, else null.
+  function hardModeError(guess, st, answer){
+    var need = {};
+    for (var gi=0; gi<st.guesses.length; gi++){
+      var prev = st.guesses[gi];
+      var res = scoreGuess(prev, answer);
+      var counts = {};
+      for (var i=0;i<COLS;i++){
+        if (res[i] === 'correct' && guess[i] !== prev[i]){
+          return ORDINALS[i] + ' letter must be ' + prev[i].toUpperCase();
+        }
+        if (res[i] !== 'absent') counts[prev[i]] = (counts[prev[i]]||0) + 1;
+      }
+      Object.keys(counts).forEach(function(ch){ need[ch] = Math.max(need[ch]||0, counts[ch]); });
+    }
+    var keys = Object.keys(need);
+    for (var k=0;k<keys.length;k++){
+      var ch = keys[k], have = 0;
+      for (var j=0;j<COLS;j++){ if (guess[j] === ch) have++; }
+      if (have < need[ch]) return 'Guess must contain ' + ch.toUpperCase();
+    }
+    return null;
+  }
+
+  hardToggle.addEventListener('click', function(){
+    if (revealing) return;
+    if (!hardMode){
+      var st = activeState();
+      var started = st.status === 'playing' && st.guesses.length > 0;
+      if (mode === 'challenge' && challengeState.phase === 'playing' && st.guesses.length > 0) started = true;
+      if (started){ toast('Hard mode can only be turned on at the start of a round'); return; }
+    }
+    hardMode = !hardMode;
+    try{ localStorage.setItem(HARD_KEY, hardMode ? 'on' : 'off'); }catch(e){}
+    if (!hardMode){
+      var cur = activeState();
+      if (cur.guesses.length > 0 && cur.status === 'playing'){ cur.hard = false; saveActiveState(); }
+    }
+    syncHardUI();
+    toast(hardMode ? 'Hard mode on' : 'Hard mode off');
   });
 
   // ---------------- Mode switching (Daily / Casual) ----------------
@@ -878,6 +983,7 @@
       newWordBtn.style.display = 'none';
     }
     if (mode === 'challenge') renderChallengeMode();
+    updateCountdowns();
   }
 
   function switchMode(newMode){
@@ -1214,7 +1320,7 @@
     if (solved) playWinSound(); else playLoseSound();
     onGameEnd({
       mode: 'challenge', won: solved, tries: cs.myResult.tries,
-      guesses: cs.guesses.slice(), answer: cs.answer, timeSec: cs.myResult.time,
+      guesses: cs.guesses.slice(), answer: cs.answer, timeSec: cs.myResult.time, hard: !!cs.hard,
       outcome: cs.opponent ? decideWinner(cs.myResult, cs.opponent) : null
     });
     cs.phase = 'done';

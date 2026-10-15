@@ -672,3 +672,51 @@
     padding: 6px 0 16px;
     opacity:0.6;
   }
+
+  /* ---------- Hard mode toggle ---------- */
+  .hard-row{
+    width:100%; max-width:520px;
+    display:flex; justify-content:center;
+    padding: 10px 20px 0;
+  }
+  .hard-toggle{
+    display:flex; align-items:center; gap:8px;
+    background:none; border:none; cursor:pointer;
+    font-family: var(--font-mono);
+    font-size:11px; font-weight:700; letter-spacing:0.8px;
+    color: var(--paper-dim);
+    padding: 4px 8px; border-radius: 999px;
+    transition: color .15s ease;
+  }
+  .hard-toggle:hover{ color: var(--paper); }
+  .hard-toggle[aria-checked="true"]{ color: var(--gold); }
+  .hard-switch{
+    width:30px; height:16px; border-radius:999px;
+    background: var(--absent);
+    position:relative; flex-shrink:0;
+    transition: background .15s ease;
+  }
+  .hard-knob{
+    position:absolute; top:2px; left:2px;
+    width:12px; height:12px; border-radius:50%;
+    background: var(--paper);
+    transition: transform .15s ease;
+  }
+  .hard-toggle[aria-checked="true"] .hard-switch{ background: var(--gold); }
+  .hard-toggle[aria-checked="true"] .hard-knob{ transform: translateX(14px); background:#2a1a06; }
+  .hard-toggle:focus-visible, .icon-btn:focus-visible, .mode-btn:focus-visible, .key:focus-visible{
+    outline: 2px solid var(--gold); outline-offset: 2px;
+  }
+
+  /* ---------- Persistent daily countdown ---------- */
+  .daily-countdown{
+    margin: -6px 0 14px;
+    font-size:11px; letter-spacing:0.8px;
+    color: var(--paper-dim);
+  }
+  .daily-countdown b{ color: var(--paper); font-family: var(--font-mono); }
+
+  /* ---------- Safe areas for installed (standalone) PWA on notched phones ---------- */
+  @media (display-mode: standalone){
+    body{ padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  }
